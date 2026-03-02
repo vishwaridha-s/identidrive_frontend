@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import axios from "axios";
 import "./styles.css";
+const API_BASE = "https://nonconcentrated-fawn-agrostographical.ngrok-free.dev";
 
 export default function App() {
   const [frames, setFrames] = useState([]);
@@ -49,9 +50,9 @@ export default function App() {
     formData.append("video", file);
     setLoading(true);
     try {
-      const res = await axios.post("http://127.0.0.1:8000/api/upload-video/", formData);
+      const res = await axios.post(`${API_BASE}/api/upload-video/`, formData);
       setFrames(res.data.frames);
-      setVideoUrl(`http://127.0.0.1:8000${res.data.video_url}`);
+      setVideoUrl(`${API_BASE}${res.data.video_url}`);
       setSelectedFrame(null);
     } catch (err) { 
       alert("Upload failed. Ensure Backend is running.");
@@ -72,8 +73,8 @@ export default function App() {
       const formData = new FormData();
       formData.append("frame", blob, "capture.jpg");
       try {
-        const capRes = await axios.post("http://127.0.0.1:8000/api/capture-frame/", formData);
-        const detRes = await axios.post("http://127.0.0.1:8000/api/detect-plates/", { frame_url: capRes.data.frame_url });
+        const capRes = await axios.post(`${API_BASE}/api/capture-frame/`, formData);
+        const detRes = await axios.post(`${API_BASE}/api/detect-plates/`, { frame_url: capRes.data.frame_url });
         setSelectedFrame(capRes.data.frame_url);
         setBoxes(detRes.data.boxes || []);
         setPredictions([]);
@@ -86,7 +87,7 @@ export default function App() {
     setPredictions([]);
     setLoading(true);
     try {
-      const res = await axios.post("http://127.0.0.1:8000/api/detect-plates/", { frame_url: frame });
+      const res = await axios.post(`${API_BASE}/api/detect-plates/`, { frame_url: frame });
       setBoxes(res.data.boxes || []);
     } catch (err) { console.error(err); } finally { setLoading(false); }
   };
@@ -95,7 +96,7 @@ export default function App() {
     setSelectedBox(index);
     setLoading(true);
     try {
-      const res = await axios.post("http://127.0.0.1:8000/api/recognize-plate/", {
+      const res = await axios.post(`${API_BASE}/api/recognize-plate/`, {
         frame_url: selectedFrame,
         x1: box.x1, y1: box.y1, x2: box.x2, y2: box.y2,
       });
@@ -112,7 +113,7 @@ export default function App() {
   const fetchHistory = async () => {
     setLoading(true);
     try {
-      const res = await axios.get("http://127.0.0.1:8000/api/get-predictions/", {
+      const res = await axios.get(`${API_BASE}/api/get-predictions/`, {
         params: { date: filterDate },
       });
       setHistory(res.data.results);
@@ -200,7 +201,7 @@ export default function App() {
           <div className="scroll-area">
             {frames.map((frame, index) => (
               <div key={index} className={`frame-card ${selectedFrame === frame ? "active" : ""}`} onClick={() => handleFrameClick(frame)}>
-                <img src={`http://127.0.0.1:8000${frame}`} alt="" />
+                <img src={`${API_BASE}${frame}`} alt="" />
                 <div className="frame-info">OFFSET: {index * 15}ms</div>
               </div>
             ))}
@@ -235,7 +236,7 @@ export default function App() {
               </div>
               <div className="image-canvas">
                 <div className="canvas-wrapper">
-                  <img ref={imgRef} src={`http://127.0.0.1:8000${selectedFrame}`} className="base-img" id="target-image" alt="Target" />
+                  <img ref={imgRef} src={`${API_BASE}${selectedFrame}`} className="base-img" id="target-image" alt="Target" />
                   {boxes.map((box, index) => (
                     <div key={index} className={`target-box ${selectedBox === index ? "focus" : ""}`}
                       style={{ 
