@@ -110,15 +110,19 @@ export default function App() {
     } finally { setLoading(false); }
   };
 
-  const fetchHistory = async () => {
-    setLoading(true);
-    try {
-      const res = await axios.get(`${API_BASE}/api/get-predictions/`, {
-        params: { date: filterDate },
-      });
-      setHistory(res.data.results);
-    } catch (err) { console.error(err); } finally { setLoading(false); }
-  };
+  const fetchHistory = async (withFilter = false) => {
+  setLoading(true);
+  try {
+    const res = await axios.get(`${API_BASE}/api/get-predictions/`, {
+      params: withFilter && filterDate ? { date: filterDate } : {},
+    });
+    setHistory(res.data.results);
+  } catch (err) {
+    console.error(err);
+  } finally {
+    setLoading(false);
+  }
+};
 
   return (
     <div className="app-container">
@@ -137,7 +141,8 @@ export default function App() {
                 <label>TEMPORAL FILTER</label>
                 <input type="date" value={filterDate} onChange={(e) => setFilterDate(e.target.value)} className="theme-input" />
               </div>
-              <button className="dash-refresh-btn" onClick={fetchHistory}>SYNCHRONIZE DATABASE</button>
+              <button className="dash-refresh-btn" onClick={() => fetchHistory(true)}>FILTER BY DATE</button>
+              <button className="dash-refresh-btn" onClick={() => fetchHistory(false)}>LOAD ALL LOGS</button>
             </div>
             <div className="dash-table-container">
               <table className="dash-table">
@@ -160,7 +165,7 @@ export default function App() {
                         <td className="time-text">{dateObj.toLocaleTimeString()}</td>
                         <td className="dim-text">{item.video_name || "Stream_01"}</td>
                         <td><span className="plate-pill">{item.top1}</span></td>
-                        <td className="confidence-text">{item.confidence || '94.2'}%</td>
+                        <td className="confidence-text">{item.confidence ? `${item.confidence}%` : "N/A"}</td>
                         <td><span className="status-chip">VERIFIED</span></td>
                       </tr>
                     );
@@ -178,7 +183,7 @@ export default function App() {
           <span className="badge">ALPR CORE v4.0</span>
         </div>
         <div className="nav-right">
-          <button className="nav-dash-btn" onClick={() => { setShowDashboard(true); fetchHistory(); }}>ACCESS LOGS</button>
+          <button className="nav-dash-btn" onClick={() => {setShowDashboard(true); fetchHistory(false);}}>ACCESS LOGS</button>
           <div className="theme-divider"></div>
           <div className="theme-toggle-container">
             <label className="switch">
