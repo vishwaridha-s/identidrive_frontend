@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import axios from "axios";
 import "./styles.css";
-const API_BASE = "https://supervisor-discuss-gnu-catalog.trycloudflare.com/";
+const API_BASE = "https://supervisor-discuss-gnu-catalog.trycloudflare.com";
 
 export default function App() {
   const [frames, setFrames] = useState([]);
