@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import axios from "axios";
 import "./styles.css";
-const API_BASE = "http://0.0.0.0:7860";
+const API_BASE = "https://vishwaridha-alpr-ml-service.hf.space";
 
 export default function App() {
   const [frames, setFrames] = useState([]);
