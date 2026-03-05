@@ -1,7 +1,8 @@
 import { useState, useEffect, useRef } from "react";
 import axios from "axios";
 import "./styles.css";
-const API_BASE = "https://vishwaridha-alpr-ml-service.hf.space";
+
+const API_BASE = "http://localhost:8000";
 
 export default function App() {
   const [frames, setFrames] = useState([]);
@@ -16,6 +17,9 @@ export default function App() {
   const [theme, setTheme] = useState("dark");
   const [playbackSpeed, setPlaybackSpeed] = useState(1);
   const [showDashboard, setShowDashboard] = useState(false);
+
+  // Added a state to force re-calculation of box positions when image loads
+  const [imgDims, setImgDims] = useState({ width: 0, height: 0 });
 
   const videoRef = useRef(null);
   const imgRef = useRef(null);
@@ -65,10 +69,14 @@ export default function App() {
     
     setLoading(true);
     const canvas = document.createElement("canvas");
+    // Ensure we capture at the video's actual resolution
     canvas.width = videoRef.current.videoWidth;
     canvas.height = videoRef.current.videoHeight;
-    canvas.getContext("2d").drawImage(videoRef.current, 0, 0);
+    const ctx = canvas.getContext("2d");
+    ctx.imageSmoothingEnabled = false; // Prevents blur during capture
+    ctx.drawImage(videoRef.current, 0, 0);
 
+    // FIX: Added '1.0' for maximum JPEG quality to prevent "too blurry" errors
     canvas.toBlob(async (blob) => {
       const formData = new FormData();
       formData.append("frame", blob, "capture.jpg");
@@ -79,12 +87,13 @@ export default function App() {
         setBoxes(detRes.data.boxes || []);
         setPredictions([]);
       } catch (err) { console.error(err); } finally { setLoading(false); }
-    }, "image/jpeg");
+    }, "image/jpeg", 1.0); 
   };
 
   const handleFrameClick = async (frame) => {
     setSelectedFrame(frame);
     setPredictions([]);
+    setBoxes([]); // Clear old boxes to prevent "mess" during transition
     setLoading(true);
     try {
       const res = await axios.post(`${API_BASE}/api/detect-plates/`, { frame_url: frame });
@@ -93,6 +102,7 @@ export default function App() {
   };
 
   const handleBoxClick = async (box, index) => {
+    if (loading) return; // Prevent broken pipe from rapid clicks
     setSelectedBox(index);
     setLoading(true);
     try {
@@ -111,18 +121,28 @@ export default function App() {
   };
 
   const fetchHistory = async (withFilter = false) => {
-  setLoading(true);
-  try {
-    const res = await axios.get(`${API_BASE}/api/get-predictions/`, {
-      params: withFilter && filterDate ? { date: filterDate } : {},
-    });
-    setHistory(res.data.results);
-  } catch (err) {
-    console.error(err);
-  } finally {
-    setLoading(false);
-  }
-};
+    setLoading(true);
+    try {
+      const res = await axios.get(`${API_BASE}/api/get-predictions/`, {
+        params: withFilter && filterDate ? { date: filterDate } : {},
+      });
+      setHistory(res.data.results);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Helper to handle image load and set dimensions for box scaling
+  const onImageLoad = () => {
+    if (imgRef.current) {
+      setImgDims({
+        width: imgRef.current.offsetWidth,
+        height: imgRef.current.offsetHeight
+      });
+    }
+  };
 
   return (
     <div className="app-container">
@@ -241,18 +261,38 @@ export default function App() {
               </div>
               <div className="image-canvas">
                 <div className="canvas-wrapper">
-                  <img ref={imgRef} src={`${API_BASE}${selectedFrame}`} className="base-img" id="target-image" alt="Target" />
-                  {boxes.map((box, index) => (
-                    <div key={index} className={`target-box ${selectedBox === index ? "focus" : ""}`}
-                      style={{ 
-                        left: `${(box.x1 / (imgRef.current?.naturalWidth || 1)) * 100}%`, 
-                        top: `${(box.y1 / (imgRef.current?.naturalHeight || 1)) * 100}%`, 
-                        width: `${((box.x2 - box.x1) / (imgRef.current?.naturalWidth || 1)) * 100}%`, 
-                        height: `${((box.y2 - box.y1) / (imgRef.current?.naturalHeight || 1)) * 100}%` 
-                      }}
-                      onClick={() => handleBoxClick(box, index)}
-                    ><span className="target-tag">{box.confidence}% MATCH</span></div>
-                  ))}
+                  <img 
+                    ref={imgRef} 
+                    onLoad={onImageLoad}
+                    src={`${API_BASE}${selectedFrame}`} 
+                    className="base-img" 
+                    id="target-image" 
+                    alt="Target" 
+                  />
+                  {boxes.map((box, index) => {
+                    const img = imgRef.current;
+                    if (!img) return null;
+
+                    // FIX: Coordinate scaling using naturalWidth vs actual display width
+                    const scaleX = img.offsetWidth / img.naturalWidth;
+                    const scaleY = img.offsetHeight / img.naturalHeight;
+
+                    return (
+                      <div
+                        key={index}
+                        className={`target-box ${selectedBox === index ? "focus" : ""}`}
+                        style={{
+                          left: `${box.x1 * scaleX}px`,
+                          top: `${box.y1 * scaleY}px`,
+                          width: `${(box.x2 - box.x1) * scaleX}px`,
+                          height: `${(box.y2 - box.y1) * scaleY}px`
+                        }}
+                        onClick={() => handleBoxClick(box, index)}
+                      >
+                        <span className="target-tag">{Math.round(box.confidence)}% MATCH</span>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             </div>
@@ -262,7 +302,15 @@ export default function App() {
               <div className="video-controls-overlay">
                 <div className="speed-selector">
                   <span>RATE:</span>
-                  {[0.5, 1, 1.5, 2].map(s => <button key={s} className={playbackSpeed === s ? "active":""} onClick={() => setPlaybackSpeed(s)}>{s}x</button>)}
+                  {[0.5, 1, 1.5, 2].map(s => (
+                    <button 
+                      key={s} 
+                      className={playbackSpeed === s ? "active":""} 
+                      onClick={() => setPlaybackSpeed(s)}
+                    >
+                      {s}x
+                    </button>
+                  ))}
                 </div>
                 <button className="cta-btn capture-btn" onClick={handleCapture}>EXTRACT & ANALYZE</button>
               </div>
@@ -276,10 +324,19 @@ export default function App() {
             {predictions.map((p, i) => (
               <div key={i} className={`plate-display ${p.isError ? "error-plate" : ""}`}>
                 <div className="value">{p.text}</div>
-                {!p.isError && <div className="diag-row"><span>PROBABILITY</span><span className="green">{p.confidence}%</span></div>}
+                {!p.isError && (
+                  <div className="diag-row">
+                    <span>PROBABILITY</span>
+                    <span className="green">{p.confidence}%</span>
+                  </div>
+                )}
               </div>
             ))}
-            {!predictions.length && <div className="placeholder-text">Await system input... <br/><small>Select a box for OCR</small></div>}
+            {!predictions.length && (
+              <div className="placeholder-text">
+                Await system input... <br/><small>Select a box for OCR</small>
+              </div>
+            )}
           </div>
         </aside>
       </div>
