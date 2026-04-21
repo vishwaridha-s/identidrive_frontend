@@ -1,10 +1,14 @@
 import { useState, useEffect, useRef } from "react";
 import axios from "axios";
 import "./styles.css";
+import Login from "./components/Login";
+import Signup from "./components/Signup";
 
 const API_BASE = "http://localhost:8000";
 
 export default function App() {
+  const [user, setUser] = useState(null);
+  const [authMode, setAuthMode] = useState("login"); 
   const [frames, setFrames] = useState([]);
   const [videoUrl, setVideoUrl] = useState(null);
   const [selectedFrame, setSelectedFrame] = useState(null);
@@ -18,13 +22,22 @@ export default function App() {
   const [playbackSpeed, setPlaybackSpeed] = useState(1);
   const [showDashboard, setShowDashboard] = useState(false);
 
-  // Added a state to force re-calculation of box positions when image loads
   const [imgDims, setImgDims] = useState({ width: 0, height: 0 });
 
   const videoRef = useRef(null);
   const imgRef = useRef(null);
 
   const toggleTheme = () => setTheme((prev) => (prev === "dark" ? "light" : "dark"));
+
+  const handleLogout = async () => {
+    try {
+      await axios.post(`${API_BASE}/api/logout/`);
+    } catch (err) {
+      console.error("Logout error", err);
+    }
+    setUser(null);
+    setAuthMode("login");
+  };
 
   useEffect(() => {
     document.documentElement.setAttribute("data-theme", theme);
@@ -69,14 +82,13 @@ export default function App() {
     
     setLoading(true);
     const canvas = document.createElement("canvas");
-    // Ensure we capture at the video's actual resolution
+    
     canvas.width = videoRef.current.videoWidth;
     canvas.height = videoRef.current.videoHeight;
     const ctx = canvas.getContext("2d");
-    ctx.imageSmoothingEnabled = false; // Prevents blur during capture
+    ctx.imageSmoothingEnabled = false; 
     ctx.drawImage(videoRef.current, 0, 0);
 
-    // FIX: Added '1.0' for maximum JPEG quality to prevent "too blurry" errors
     canvas.toBlob(async (blob) => {
       const formData = new FormData();
       formData.append("frame", blob, "capture.jpg");
@@ -93,7 +105,7 @@ export default function App() {
   const handleFrameClick = async (frame) => {
     setSelectedFrame(frame);
     setPredictions([]);
-    setBoxes([]); // Clear old boxes to prevent "mess" during transition
+    setBoxes([]); 
     setLoading(true);
     try {
       const res = await axios.post(`${API_BASE}/api/detect-plates/`, { frame_url: frame });
@@ -102,7 +114,7 @@ export default function App() {
   };
 
   const handleBoxClick = async (box, index) => {
-    if (loading) return; // Prevent broken pipe from rapid clicks
+    if (loading) return; 
     setSelectedBox(index);
     setLoading(true);
     try {
@@ -134,7 +146,6 @@ export default function App() {
     }
   };
 
-  // Helper to handle image load and set dimensions for box scaling
   const onImageLoad = () => {
     if (imgRef.current) {
       setImgDims({
@@ -143,6 +154,21 @@ export default function App() {
       });
     }
   };
+
+  if (!user) {
+    return authMode === "login" ? (
+      <Login 
+        apiBase={API_BASE} 
+        onLogin={(username) => setUser(username)} 
+        onSwitchToSignup={() => setAuthMode("signup")} 
+      />
+    ) : (
+      <Signup 
+        apiBase={API_BASE} 
+        onSwitchToLogin={() => setAuthMode("login")} 
+      />
+    );
+  }
 
   return (
     <div className="app-container">
@@ -203,6 +229,11 @@ export default function App() {
           <span className="badge">ALPR CORE v4.0</span>
         </div>
         <div className="nav-right">
+          <div className="nav-user">
+            <span className="user-name">OPERATOR: {user}</span>
+            <button className="signout-btn" onClick={handleLogout}>SIGNOUT</button>
+          </div>
+          <div className="theme-divider"></div>
           <button className="nav-dash-btn" onClick={() => {setShowDashboard(true); fetchHistory(false);}}>ACCESS LOGS</button>
           <div className="theme-divider"></div>
           <div className="theme-toggle-container">
@@ -273,7 +304,6 @@ export default function App() {
                     const img = imgRef.current;
                     if (!img) return null;
 
-                    // FIX: Coordinate scaling using naturalWidth vs actual display width
                     const scaleX = img.offsetWidth / img.naturalWidth;
                     const scaleY = img.offsetHeight / img.naturalHeight;
 
