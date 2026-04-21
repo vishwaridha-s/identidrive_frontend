@@ -5,6 +5,11 @@ import Login from "./components/Login";
 import Signup from "./components/Signup";
 
 const API_BASE = "http://localhost:8000";
+axios.defaults.withCredentials = true;
+axios.defaults.xsrfCookieName = 'csrftoken';
+axios.defaults.xsrfHeaderName = 'X-CSRFToken';
+
+
 
 export default function App() {
   const [user, setUser] = useState(null);
@@ -194,6 +199,7 @@ export default function App() {
               <table className="dash-table">
                 <thead>
                   <tr>
+                    <th>IMAGE</th>
                     <th>DATE</th>
                     <th>TIME</th>
                     <th>SOURCE</th>
@@ -207,6 +213,11 @@ export default function App() {
                     const dateObj = new Date(item.created_at);
                     return (
                       <tr key={i}>
+                        <td className="img-cell">
+                          {item.frame_path && (
+                            <img src={`${API_BASE}${item.frame_path}`} alt="" className="log-thumb" />
+                          )}
+                        </td>
                         <td>{dateObj.toLocaleDateString()}</td>
                         <td className="time-text">{dateObj.toLocaleTimeString()}</td>
                         <td className="dim-text">{item.video_name || "Stream_01"}</td>
